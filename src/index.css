@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+:root, [data-theme="dark"] {
+  --bg: #050508;
+  --surface: rgba(108, 99, 255, 0.03);
+  --card: rgba(255, 255, 255, 0.02);
+  --border: rgba(108, 99, 255, 0.15);
+  --accent: #6C63FF;
+  --accent-glow: rgba(108, 99, 255, 0.25);
+  --text: #E8E8F0;
+  --muted: #6B6B7A;
+  --success: #22C55E;
+  --warning: #D97706;
+  --fail: #EF4444;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px var(--accent-glow), 0 0 40px var(--accent-glow); }
+  50% { box-shadow: 0 0 30px var(--accent-glow), 0 0 60px var(--accent-glow); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(108, 99, 255, 0.1), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(108, 99, 255, 0.12);
+}
+
+body {
+  font-family: 'Fragment Mono', monospace;
+  background-color: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.font-syne { font-family: 'Syne', sans-serif; }
+.font-fragment { font-family: 'Fragment Mono', monospace; }
+.font-space { font-family: 'Space Grotesk', sans-serif; }
+
+.dot-grid-bg {
+  background-image: 
+    radial-gradient(circle at 50% 50%, rgba(108, 99, 255, 0.08) 0%, transparent 70%),
+    radial-gradient(circle, #2C2C3A 1px, transparent 1px);
+  background-size: 100% 100%, 28px 28px;
+  background-position: center, center;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); }
+::-webkit-scrollbar-thumb { background: rgba(108, 99, 255, 0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(108, 99, 255, 0.5); }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up { animation: none; opacity: 1; }
+  .animate-pulse-glow { animation: none; }
+  .animate-shimmer { animation: none; }
+}
+
+.hash-text {
+  font-family: 'Fragment Mono', monospace;
+  letter-spacing: 0.02em;
+  word-break: break-all;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  transition: all 0.2s ease;
+}
+
+.btn-ghost:hover {
+  border-color: var(--accent);
+  background: rgba(108, 99, 255, 0.05);
+}
+
+.score-badge {
+  background: linear-gradient(135deg, var(--accent), rgba(108, 99, 255, 0.6));
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+
+.pass-indicator { color: var(--success); }
+.fail-indicator { color: var(--fail); }
