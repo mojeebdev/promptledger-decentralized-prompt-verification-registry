@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { proxyCompute, getHealth } from './proxy-compute.js';
+import { uploadStorage, downloadStorage, getStorageHealth } from './proxy-storage.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -78,8 +79,35 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.url === '/api/health' && req.method === 'GET') {
-    json(res, 200, getHealth());
+    json(res, 200, { ...getHealth(), storage: getStorageHealth() });
     return;
+  }
+
+  if (req.url?.startsWith('/api/storage')) {
+    if (req.method === 'POST') {
+      let raw = '';
+      req.on('data', (chunk) => {
+        raw += chunk;
+      });
+      req.on('end', async () => {
+        try {
+          const body = JSON.parse(raw || '{}');
+          const result = await uploadStorage(body);
+          json(res, result.status, result.data);
+        } catch {
+          json(res, 400, { error: 'Invalid JSON body' });
+        }
+      });
+      return;
+    }
+
+    if (req.method === 'GET') {
+      const url = new URL(req.url, 'http://localhost');
+      const root = url.searchParams.get('root');
+      const result = await downloadStorage(root);
+      json(res, result.status, result.data);
+      return;
+    }
   }
 
   if (req.url === '/api/compute' && req.method === 'POST') {
@@ -113,5 +141,7 @@ server.listen(PORT, () => {
   console.log(`[PromptLedger API] Router: ${health.router}`);
   console.log(`[PromptLedger API] Model: ${health.model}`);
   console.log(`[PromptLedger API] API key: ${health.hasApiKey ? 'configured' : 'MISSING'}`);
+  const storage = getStorageHealth();
+  console.log(`[PromptLedger API] Storage key: ${storage.hasStorageKey ? 'configured' : 'MISSING'}`);
   if (SERVE_STATIC) console.log(`[PromptLedger API] Serving static files from dist/`);
 });
