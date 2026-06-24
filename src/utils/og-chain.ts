@@ -6,7 +6,7 @@
  * Network: 0G Testnet (chainId: 16602)
  */
 
-import { encodeFunctionData, parseEther } from 'wagmi';
+import { encodeFunctionData, parseEther } from 'viem';
 
 // PromptLedger contract ABI
 const PROMPT_LEDGER_ABI = [
