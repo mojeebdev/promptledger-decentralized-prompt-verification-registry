@@ -45,9 +45,12 @@ npx hardhat run scripts/deploy.js --network og-testnet
 ## After Deployment
 
 1. Copy the deployed contract address
-2. Update `src/utils/og-chain.ts`:
-   - Replace `PROMPT_LEDGER_ADDRESS = null` with your address
-3. The app will now make real on-chain transactions
+2. Add to `.env.local` (and your hosting provider's env vars for production builds):
+   ```
+   VITE_PROMPT_LEDGER_ADDRESS=0xYourDeployedAddress
+   ```
+3. Update the address in `README.md` under Smart contract
+4. Restart dev server — navbar should show **Contract Live**
 
 ## Testing the Contract
 

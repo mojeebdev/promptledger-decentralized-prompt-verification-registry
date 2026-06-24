@@ -39,7 +39,7 @@ Every integration either does the real thing or tells you clearly when it can't 
 
 - If **0G Storage** is unreachable, the app falls back to local storage and explicitly flags the entry `isLocalFallback: true` — the UI shows this as a warning, not a success.
 - If **0G Compute** fails and demo mode is explicitly enabled, results are generated from regex pattern-matching instead of the real model — flagged `isDemo: true` and shown with a warning border in the UI. Demo mode is off by default; without it, a compute failure is reported as an honest error.
-- If the **chain anchor** transaction fails or the contract isn't deployed, the entry is marked `chainAnchorPending` rather than showing a fabricated transaction hash.
+- If the **chain anchor** transaction fails (wrong network, rejected tx, insufficient gas), the entry shows the real error — never a fake transaction hash.
 
 This matters because an earlier iteration of this project *did* fake all three of these — random scores, a randomly generated wallet address, a `Math.random()` transaction hash dressed up as a real one. That version was fully removed; nothing here references it. The code in this repo only ever shows you the truth about what succeeded.
 
@@ -56,17 +56,25 @@ This matters because an earlier iteration of this project *did* fake all three o
 
 ---
 
-## Smart contract
+## Smart contract (live on 0G Testnet)
 
-`contracts/PromptLedger.sol` — deployed to 0G Testnet at:
+`contracts/PromptLedger.sol` — **deployed and verified** at:
 
 ```
 0xb6aedBF17a11928A63773F88a9CfD3E252F43a63
 ```
 
-Network: 0G Testnet (chainId `16602`) · RPC: `https://evmrpc-testnet.0g.ai` · Explorer: `https://explorer-testnet.0g.ai`
+[View on explorer →](https://explorer-testnet.0g.ai/address/0xb6aedBF17a11928A63773F88a9CfD3E252F43a63)
 
-The contract is intentionally minimal: a mapping from prompt hash to record (parent hash, storage root, score, submitter, timestamp), an `anchorPrompt` function to write a new record, and a `getVersionChain` function that walks a hash back to its v1 ancestor on-chain. See `contracts/DEPLOY.md` for redeployment instructions.
+Network: 0G Testnet (chainId `16602`) · RPC: `https://evmrpc-testnet.0g.ai`
+
+The app verifies this contract on load and shows **Contract Live** in the navbar when bytecode is found on-chain. Configure via `.env.local`:
+
+```env
+VITE_PROMPT_LEDGER_ADDRESS=0xb6aedBF17a11928A63773F88a9CfD3E252F43a63
+```
+
+The contract stores prompt hash, parent hash, storage root, score, submitter, and timestamp via `anchorPrompt`. See `contracts/DEPLOY.md` if redeploying to a new address.
 
 ---
 
@@ -108,8 +116,9 @@ src/
     og-compute.ts      — calls /api/compute backend proxy (key never in browser)
 server/
   index.js             — 0G Router proxy; auto-selects testnet model
-    og-storage.ts      — uploads to 0G Storage, with honest local-fallback handling
-    og-chain.ts        — encodes and sends the on-chain anchor transaction
+src/utils/
+  og-storage.ts        — uploads to 0G Storage, with honest local-fallback handling
+  og-chain.ts          — encodes and sends the on-chain anchor transaction
 ```
 
 ---

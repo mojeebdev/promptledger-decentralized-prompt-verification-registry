@@ -37,6 +37,7 @@ import {
   getExplorerTxUrl,
   getExplorerContractUrl,
   getContractAddress,
+  verifyContractDeployed,
   OG_TESTNET_CHAIN_ID,
   type AnchorResult,
 } from './utils/og-chain';
@@ -149,6 +150,7 @@ export default function App() {
   const [debugLogs, setDebugLogs] = useState<DebugLog[]>([]);
   const [showDebug, setShowDebug] = useState(false);
   const [useDemoMode, setUseDemoMode] = useState(false);
+  const [contractLive, setContractLive] = useState<boolean | null>(null);
   const mainContentRef = useRef<HTMLElement>(null);
 
   const goToTab = useCallback((tab: 'leaderboard' | 'submit') => {
@@ -183,6 +185,21 @@ export default function App() {
       }
     }
   }, [addLog]);
+
+  useEffect(() => {
+    if (!publicClient) return;
+    verifyContractDeployed(publicClient).then((live) => {
+      setContractLive(live);
+      const addr = getContractAddress();
+      addLog(
+        'chain',
+        live ? 'success' : 'error',
+        live
+          ? `PromptLedger contract live on 0G Testnet: ${addr.slice(0, 10)}...`
+          : `No contract bytecode at ${addr} — check VITE_PROMPT_LEDGER_ADDRESS`
+      );
+    });
+  }, [publicClient, addLog]);
 
   useEffect(() => {
     localStorage.setItem('promptledger_leaderboard', JSON.stringify(leaderboard));
@@ -509,6 +526,18 @@ export default function App() {
             <span className="font-syne font-bold text-lg">PromptLedger</span>
           </div>
           <div className="flex items-center gap-4">
+            {contractLive && (
+              <a
+                href={getExplorerContractUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--success)]/10 border border-[var(--success)]/20 text-[var(--success)] font-space text-xs hover:bg-[var(--success)]/20 transition-colors"
+                title={getContractAddress()}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] animate-pulse" />
+                Contract Live
+              </a>
+            )}
             <button
               onClick={() => setShowDebug(!showDebug)}
               className="p-2 rounded-lg hover:bg-white/5 transition-colors"

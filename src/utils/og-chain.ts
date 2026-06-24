@@ -111,6 +111,21 @@ export function getContractAddress(): string {
   return PROMPT_LEDGER_ADDRESS;
 }
 
+/**
+ * Verify the configured contract has bytecode on 0G Testnet
+ */
+export async function verifyContractDeployed(publicClient: {
+  getBytecode: (args: { address: `0x${string}` }) => Promise<`0x${string}` | undefined>;
+}): Promise<boolean> {
+  if (!isChainAnchoringAvailable()) return false;
+  try {
+    const bytecode = await publicClient.getBytecode({ address: PROMPT_LEDGER_ADDRESS });
+    return Boolean(bytecode && bytecode !== '0x');
+  } catch {
+    return false;
+  }
+}
+
 function toBytes32(value: string): `0x${string}` {
   const hex = value.startsWith('0x') ? value.slice(2) : value;
   if (!/^[0-9a-fA-F]+$/.test(hex)) {
