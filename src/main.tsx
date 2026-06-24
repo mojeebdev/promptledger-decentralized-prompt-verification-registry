@@ -1,3 +1,4 @@
+import './storage-relay-init';
 import './index.css';
 import { createRoot } from 'react-dom/client';
 import { Providers } from './providers';

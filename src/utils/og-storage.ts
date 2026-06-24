@@ -6,7 +6,7 @@
 import { MemData, Indexer } from '@0gfoundation/0g-storage-ts-sdk/browser';
 import { BrowserProvider } from 'ethers';
 import { OG_TESTNET_CHAIN_ID } from './og-chain';
-import { enableStorageNodeRelay } from './storage-relay';
+
 
 const RPC_URL = 'https://evmrpc-testnet.0g.ai';
 const INDEXER_RPC = 'https://indexer-storage-testnet-turbo.0g.ai';
@@ -106,7 +106,6 @@ function parseStoredPayload(raw: string): StorageData | null {
  */
 export async function uploadToStorage(data: StorageData): Promise<StorageResult> {
   console.log('[0G Storage] Uploading via SDK (wallet pays storage fee)...');
-  enableStorageNodeRelay();
 
   try {
     const signer = await getSigner();
@@ -179,8 +178,6 @@ export async function downloadFromStorage(
     console.log('[0G Storage] Found in local storage:', rootHash);
     return { data: parseStoredPayload(localData), isLocal: true };
   }
-
-  enableStorageNodeRelay();
 
   try {
     const indexer = new Indexer(INDEXER_RPC);
