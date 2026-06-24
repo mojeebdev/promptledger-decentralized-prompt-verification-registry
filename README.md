@@ -49,7 +49,7 @@ This matters because an earlier iteration of this project *did* fake all three o
 
 - **Frontend:** React 19 + TypeScript, Vite
 - **Wallet:** wagmi + viem, injected connector (MetaMask-compatible)
-- **Model:** 0G Compute, `zai-org/GLM-5-FP8`
+- **Model:** 0G Compute via backend proxy — `qwen2.5-omni` on testnet, `zai-org/GLM-5-FP8` on mainnet
 - **Storage:** 0G Storage (with local fallback, explicitly flagged)
 - **Chain:** 0G Testnet, custom `PromptLedger.sol` contract
 - **Styling:** Tailwind CSS v4
@@ -74,8 +74,13 @@ The contract is intentionally minimal: a mapping from prompt hash to record (par
 
 ```bash
 npm install
-npm run dev
+cp .env.example .env.local   # add your OG_API_KEY from pc.testnet.0g.ai
+npm run dev                    # starts API proxy (:3001) + Vite (:5173)
 ```
+
+`npm run dev` runs two processes: a **backend proxy** (`server/index.js`) that holds your 0G API key server-side, and the Vite frontend. Real compute on testnet uses `qwen2.5-omni` (GLM-5 is mainnet-only).
+
+Production: `npm run build && npm start` — serves the built app and API from one Node process.
 
 You'll need a wallet (MetaMask or compatible) with 0G Testnet added:
 
@@ -100,7 +105,9 @@ src/
   wagmi-config.ts      — chain config (0G Testnet) and connector setup
   utils/
     hash.ts            — SHA-256 hashing for prompts and test sets
-    og-compute.ts      — calls 0G Compute for model evaluation, with honest error/demo handling
+    og-compute.ts      — calls /api/compute backend proxy (key never in browser)
+server/
+  index.js             — 0G Router proxy; auto-selects testnet model
     og-storage.ts      — uploads to 0G Storage, with honest local-fallback handling
     og-chain.ts        — encodes and sends the on-chain anchor transaction
 ```

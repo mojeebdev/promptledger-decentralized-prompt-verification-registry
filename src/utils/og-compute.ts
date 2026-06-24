@@ -1,31 +1,12 @@
 /**
  * 0G Compute Integration
- * Sends prompts to zai-org/GLM-5-FP8 via the 0G Compute Router.
+ * Calls the backend proxy — API key stays server-side.
  *
  * IMPORTANT: Does not fake results. Failures return honest errors unless
  * demo mode is explicitly enabled by the caller.
  */
 
-const MODEL_PROVIDER = '0xd9966e13a6026fcca4b13e7ff95c94de268c471c';
-const MODEL_ID = 'zai-org/GLM-5-FP8';
-const ROUTER_API =
-  import.meta.env.VITE_0G_ROUTER_API ?? 'https://router-api-testnet.integratenetwork.work/v1';
-
-interface ComputeMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-interface ComputeResponse {
-  id: string;
-  choices: Array<{
-    message: {
-      role: string;
-      content: string;
-    };
-    finish_reason: string;
-  }>;
-}
+const PROXY_URL = '/api/compute';
 
 let lastError: { message: string; status?: number; body?: string } | null = null;
 
@@ -42,6 +23,7 @@ export interface ComputeResult {
   output: string | null;
   error?: string;
   isDemo?: boolean;
+  model?: string;
 }
 
 /**
@@ -57,66 +39,42 @@ export async function runPromptEvaluation(
     return { success: true, output, isDemo: true };
   }
 
-  const messages: ComputeMessage[] = [
-    { role: 'system', content: systemPrompt },
-    {
-      role: 'user',
-      content: `Extract the name, date, and amount from this text. Return ONLY valid JSON with keys: name, date (YYYY-MM-DD format), amount (decimal number only).\n\nText:\n${testInput}`,
-    },
-  ];
-
   lastError = null;
-  const apiKey = import.meta.env.VITE_0G_API_KEY as string | undefined;
-
-  if (!apiKey) {
-    const error =
-      '0G Compute API key not configured. Set VITE_0G_API_KEY in .env.local, or enable Demo Mode.';
-    lastError = { message: error };
-    return { success: false, output: null, error };
-  }
 
   try {
-    console.log('[0G Compute] Calling model:', MODEL_ID);
+    console.log('[0G Compute] Calling backend proxy...');
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'X-Provider-Address': MODEL_PROVIDER,
-    };
-
-    const response = await fetch(`${ROUTER_API}/chat/completions`, {
+    const response = await fetch(PROXY_URL, {
       method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: MODEL_ID,
-        messages,
-        temperature: 0.1,
-        max_tokens: 256,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ systemPrompt, testInput }),
     });
 
+    const data = await response.json().catch(() => ({}));
+
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText = data?.error || `Proxy error ${response.status}`;
       lastError = {
-        message: `0G Compute API error: ${response.status}`,
+        message: errorText,
         status: response.status,
-        body: errorText,
+        body: JSON.stringify(data),
       };
-      console.error('[0G Compute] API error:', response.status, errorText);
+      console.error('[0G Compute] Proxy error:', response.status, errorText);
 
       return {
         success: false,
         output: null,
-        error: `API returned ${response.status}: ${errorText.slice(0, 120) || 'request failed'}`,
+        error: errorText,
       };
     }
 
-    const data: ComputeResponse = await response.json();
-
-    if (data.choices?.[0]?.message?.content) {
-      const output = data.choices[0].message.content;
-      console.log('[0G Compute] Success:', output.slice(0, 100));
-      return { success: true, output };
+    if (data?.output) {
+      console.log('[0G Compute] Success via', data.model || '0G Router');
+      return {
+        success: true,
+        output: data.output,
+        model: data.model,
+      };
     }
 
     return {
@@ -132,7 +90,7 @@ export async function runPromptEvaluation(
     return {
       success: false,
       output: null,
-      error: `Network error: ${errorMsg}`,
+      error: `Compute proxy unavailable: ${errorMsg}. Is the API server running? (npm run dev)`,
     };
   }
 }
