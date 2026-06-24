@@ -277,14 +277,14 @@ export async function getPromptFromChain(
  * Get block explorer URL for a transaction
  */
 export function getExplorerTxUrl(txHash: string): string {
-  return `https://explorer-testnet.0g.ai/tx/${txHash}`;
+  return `chainscan-galileo.0g.ai/tx/${txHash}`;
 }
 
 /**
  * Get block explorer URL for the contract
  */
 export function getExplorerContractUrl(): string {
-  return `https://explorer-testnet.0g.ai/address/${PROMPT_LEDGER_ADDRESS}`;
+  return `chainscan-galileo.0g.ai/address/${PROMPT_LEDGER_ADDRESS}`;
 }
 
 export { PROMPT_LEDGER_ABI, PROMPT_LEDGER_ADDRESS };
