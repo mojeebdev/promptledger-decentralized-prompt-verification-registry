@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import {
   X,
@@ -139,6 +139,14 @@ export default function App() {
   const [debugLogs, setDebugLogs] = useState<DebugLog[]>([]);
   const [showDebug, setShowDebug] = useState(false);
   const [useDemoMode, setUseDemoMode] = useState(false);
+  const mainContentRef = useRef<HTMLElement>(null);
+
+  const goToTab = useCallback((tab: 'leaderboard' | 'submit') => {
+    setActiveTab(tab);
+    requestAnimationFrame(() => {
+      mainContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
 
   const addLog = useCallback((step: string, status: DebugLog['status'], message: string, data?: unknown) => {
     const log: DebugLog = {
@@ -432,7 +440,7 @@ export default function App() {
       setIsEvaluating(false);
       setPromptTitle('');
       setPromptText('');
-      setActiveTab('leaderboard');
+      goToTab('leaderboard');
 
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Evaluation failed';
@@ -440,7 +448,7 @@ export default function App() {
       setError(errorMsg);
       setIsEvaluating(false);
     }
-  }, [promptTitle, promptText, connectedAddress, isConnected, walletClient, findExistingPrompt, addLog, useDemoMode]);
+  }, [promptTitle, promptText, connectedAddress, isConnected, walletClient, findExistingPrompt, addLog, useDemoMode, goToTab]);
 
   const handleCopyHash = (hash: string) => {
     navigator.clipboard.writeText(hash);
@@ -751,14 +759,14 @@ export default function App() {
                   </p>
                   <div className="flex gap-4">
                     <button
-                      onClick={() => setActiveTab('submit')}
+                      onClick={() => goToTab('submit')}
                       className="btn-primary px-6 py-3 rounded-xl flex items-center gap-2"
                     >
                       <Zap className="w-4 h-4" />
                       Submit Prompt
                     </button>
                     <button
-                      onClick={() => setActiveTab('leaderboard')}
+                      onClick={() => goToTab('leaderboard')}
                       className="btn-ghost px-6 py-3 rounded-xl flex items-center gap-2"
                     >
                       <Trophy className="w-4 h-4" />
@@ -840,10 +848,10 @@ export default function App() {
             )}
 
             {/* Tab Navigation */}
-            <section className="max-w-7xl mx-auto px-6">
+            <section ref={mainContentRef} id="main-content" className="max-w-7xl mx-auto px-6 scroll-mt-20">
               <div className="flex gap-2 mb-8">
                 <button
-                  onClick={() => setActiveTab('leaderboard')}
+                  onClick={() => goToTab('leaderboard')}
                   className={`px-4 py-2 rounded-lg font-space text-sm transition-all ${
                     activeTab === 'leaderboard'
                       ? 'bg-[var(--accent)] text-white'
@@ -853,7 +861,7 @@ export default function App() {
                   Leaderboard
                 </button>
                 <button
-                  onClick={() => setActiveTab('submit')}
+                  onClick={() => goToTab('submit')}
                   className={`px-4 py-2 rounded-lg font-space text-sm transition-all ${
                     activeTab === 'submit'
                       ? 'bg-[var(--accent)] text-white'
@@ -874,7 +882,7 @@ export default function App() {
                         Be the first to submit a prompt and get it verified on-chain.
                       </p>
                       <button
-                        onClick={() => setActiveTab('submit')}
+                        onClick={() => goToTab('submit')}
                         className="btn-primary px-6 py-3 rounded-xl"
                       >
                         Submit Your First Prompt
