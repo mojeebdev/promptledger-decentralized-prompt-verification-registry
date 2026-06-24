@@ -5,7 +5,8 @@
  * Network: 0G Testnet (chainId: 16602)
  */
 
-import { encodeFunctionData } from 'viem';
+import { getAccount, switchChain, writeContract } from '@wagmi/core';
+import { config } from '../wagmi-config';
 
 // PromptLedger contract ABI
 const PROMPT_LEDGER_ABI = [
@@ -142,18 +143,8 @@ export async function anchorToChain(params: {
   parentHash: string | null;
   storageRoot: string;
   score: number;
-  walletClient?: {
-    account: { address: `0x${string}` };
-    chain: { id: number } | null;
-    sendTransaction: (tx: {
-      to: `0x${string}`;
-      data: `0x${string}`;
-      value?: bigint;
-      chain?: typeof OG_TESTNET;
-    }) => Promise<`0x${string}`>;
-  };
 }): Promise<AnchorResult> {
-  const { promptHash, parentHash, storageRoot, score, walletClient } = params;
+  const { promptHash, parentHash, storageRoot, score } = params;
 
   if (!isChainAnchoringAvailable()) {
     return {
@@ -165,24 +156,32 @@ export async function anchorToChain(params: {
     };
   }
 
-  if (!walletClient) {
-    return {
-      success: false,
-      txHash: null,
-      blockNumber: null,
-      isPending: true,
-      error: 'Wallet not connected',
-    };
-  }
-
-  if (walletClient.chain?.id && walletClient.chain.id !== OG_TESTNET_CHAIN_ID) {
+  const account = getAccount(config);
+  if (!account.isConnected || !account.address) {
     return {
       success: false,
       txHash: null,
       blockNumber: null,
       isPending: false,
-      error: `Wallet is on chain ${walletClient.chain.id}, not 0G Testnet (${OG_TESTNET_CHAIN_ID}). Switch network in MetaMask.`,
+      error: 'Wallet not connected — click Connect Wallet and try again',
     };
+  }
+
+  if (account.chainId !== OG_TESTNET_CHAIN_ID) {
+    try {
+      await switchChain(config, { chainId: OG_TESTNET_CHAIN_ID });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Network switch failed';
+      return {
+        success: false,
+        txHash: null,
+        blockNumber: null,
+        isPending: false,
+        error: errorMessage.includes('User rejected')
+          ? 'Network switch rejected — select 0G Testnet in MetaMask'
+          : `Please switch MetaMask to 0G Testnet (chain ${OG_TESTNET_CHAIN_ID})`,
+      };
+    }
   }
 
   try {
@@ -190,20 +189,16 @@ export async function anchorToChain(params: {
     const parentHashBytes = toBytes32(parentHash || ZERO_BYTES32);
     const storageRootBytes = toBytes32(storageRoot);
 
-    const data = encodeFunctionData({
+    console.log('[0G Chain] Sending transaction to:', PROMPT_LEDGER_ADDRESS);
+    console.log('[0G Chain] Explorer:', getExplorerContractUrl());
+    console.log('[0G Chain] Submitter:', account.address);
+
+    const txHash = await writeContract(config, {
+      address: PROMPT_LEDGER_ADDRESS,
       abi: PROMPT_LEDGER_ABI,
       functionName: 'anchorPrompt',
       args: [promptHashBytes, parentHashBytes, storageRootBytes, score],
-    });
-
-    console.log('[0G Chain] Sending transaction to:', PROMPT_LEDGER_ADDRESS);
-    console.log('[0G Chain] Explorer:', getExplorerContractUrl());
-
-    const txHash = await walletClient.sendTransaction({
-      to: PROMPT_LEDGER_ADDRESS,
-      data,
-      value: BigInt(0),
-      chain: OG_TESTNET,
+      chainId: OG_TESTNET_CHAIN_ID,
     });
 
     console.log('[0G Chain] Transaction sent:', txHash);

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useAccount, usePublicClient, useWalletClient, useSwitchChain } from 'wagmi';
+import { useAccount, usePublicClient, useSwitchChain } from 'wagmi';
 import {
   X,
   ChevronRight,
@@ -132,7 +132,6 @@ function truncateHash(hash: string) {
 
 export default function App() {
   const { address: connectedAddress, isConnected, chain } = useAccount();
-  const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
   const { switchChainAsync } = useSwitchChain();
   
@@ -254,6 +253,20 @@ export default function App() {
     
     if (useDemoMode) {
       addLog('mode', 'warning', 'Demo mode enabled - results will be pattern-based, not from real model');
+    }
+
+    if (chain?.id !== OG_TESTNET_CHAIN_ID) {
+      addLog('chain', 'info', 'Switching wallet to 0G Testnet...');
+      try {
+        await switchChainAsync({ chainId: OG_TESTNET_CHAIN_ID });
+        addLog('chain', 'success', 'Wallet on 0G Testnet');
+      } catch (switchErr) {
+        const msg = switchErr instanceof Error ? switchErr.message : 'Network switch failed';
+        addLog('chain', 'error', msg);
+        setError(`Please switch MetaMask to 0G Testnet (chain ${OG_TESTNET_CHAIN_ID}): ${msg}`);
+        setIsEvaluating(false);
+        return;
+      }
     }
 
     const chainAvailable = isChainAnchoringAvailable();
@@ -415,31 +428,17 @@ export default function App() {
 
       addLog('chain', 'info', 'Attempting on-chain anchor...');
 
-      if (chain?.id !== OG_TESTNET_CHAIN_ID) {
-        addLog('chain', 'info', 'Switching wallet to 0G Testnet...');
-        try {
-          await switchChainAsync({ chainId: OG_TESTNET_CHAIN_ID });
-        } catch (switchErr) {
-          const msg = switchErr instanceof Error ? switchErr.message : 'Network switch failed';
-          addLog('chain', 'error', msg);
-          setError(`Please switch MetaMask to 0G Testnet (chain ${OG_TESTNET_CHAIN_ID}): ${msg}`);
-          setIsEvaluating(false);
-          return;
-        }
-      }
+      let txHash: string | null = null;
+      let txExplorerUrl: string | null = null;
+      let chainAnchorPending = false;
+      let chainAnchorError: string | undefined;
 
       const anchorResult: AnchorResult = await anchorToChain({
         promptHash,
         parentHash,
         storageRoot: storageResult.rootHash!,
         score,
-        walletClient,
       });
-
-      let txHash: string | null = null;
-      let txExplorerUrl: string | null = null;
-      let chainAnchorPending = false;
-      let chainAnchorError: string | undefined;
 
       if (anchorResult.success && anchorResult.txHash) {
         txHash = anchorResult.txHash;
@@ -496,7 +495,7 @@ export default function App() {
       setError(errorMsg);
       setIsEvaluating(false);
     }
-  }, [promptTitle, promptText, connectedAddress, isConnected, walletClient, chain, switchChainAsync, findExistingPrompt, addLog, useDemoMode, goToTab]);
+  }, [promptTitle, promptText, connectedAddress, isConnected, chain, switchChainAsync, findExistingPrompt, addLog, useDemoMode, goToTab]);
 
   const handleCopyHash = (hash: string) => {
     navigator.clipboard.writeText(hash);

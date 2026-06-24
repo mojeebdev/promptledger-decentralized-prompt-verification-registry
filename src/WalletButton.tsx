@@ -1,4 +1,5 @@
-import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi';
+import { useAccount, useConnect, useDisconnect, useBalance, useSwitchChain } from 'wagmi';
+import { OG_TESTNET_CHAIN_ID } from './utils/og-chain';
 import { Wallet, Loader2, Copy, Check } from 'lucide-react';
 import { useState } from 'react';
 
@@ -14,7 +15,9 @@ export function WalletButton() {
   const { address, isConnected, chain } = account;
   const { connectors, connect, isPending, error } = connectResult;
   const { disconnect } = disconnectResult;
-  
+  const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
+  const onWrongNetwork = isConnected && chain && chain.id !== OG_TESTNET_CHAIN_ID;
+
   // Only call useBalance when we have an address
   const balanceResult = useBalance({ 
     address: address,
@@ -76,7 +79,18 @@ export function WalletButton() {
               {chain && (
                 <div className="mb-3 pb-3 border-b border-[var(--border)]">
                   <div className="font-space text-xs text-[var(--muted)] uppercase mb-1">Network</div>
-                  <div className="font-fragment text-sm">{chain.name}</div>
+                  <div className={`font-fragment text-sm ${onWrongNetwork ? 'text-[var(--warning)]' : ''}`}>
+                    {chain.name}
+                  </div>
+                  {onWrongNetwork && (
+                    <button
+                      onClick={() => switchChainAsync({ chainId: OG_TESTNET_CHAIN_ID })}
+                      disabled={isSwitching}
+                      className="mt-2 w-full py-2 rounded-lg bg-[var(--warning)]/10 text-[var(--warning)] font-space text-xs hover:bg-[var(--warning)]/20 transition-colors disabled:opacity-50"
+                    >
+                      {isSwitching ? 'Switching...' : 'Switch to 0G Testnet'}
+                    </button>
+                  )}
                 </div>
               )}
               
