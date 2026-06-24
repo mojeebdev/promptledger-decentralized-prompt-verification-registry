@@ -88,7 +88,25 @@ npm run dev                    # starts API proxy (:3001) + Vite (:5173)
 
 `npm run dev` runs two processes: a **backend proxy** (`server/index.js`) that holds your 0G API key server-side, and the Vite frontend. Real compute on testnet uses `qwen2.5-omni` (GLM-5 is mainnet-only).
 
-Production: `npm run build && npm start` — serves the built app and API from one Node process.
+Production (required for real 0G Compute — static-only hosts return 404 on `/api/compute`):
+
+**Option A — Vercel (recommended, free):**
+1. Import repo at [vercel.com](https://vercel.com)
+2. Add env var `OG_API_KEY` = your `sk-` key from pc.testnet.0g.ai
+3. Add `VITE_PROMPT_LEDGER_ADDRESS` = your contract address
+4. Deploy — `api/compute.js` serverless function handles inference
+
+**Option B — Render:**
+1. Connect repo at [render.com](https://render.com)
+2. Use the included `render.yaml` blueprint
+3. Set `OG_API_KEY` in the dashboard
+
+**Option C — Self-hosted Node:**
+```bash
+npm run build && npm start
+```
+
+Zero Studio / static-only deploys serve the frontend only — 0G Compute will not work until you redeploy with one of the options above (or use Demo Mode locally).
 
 You'll need a wallet (MetaMask or compatible) with 0G Testnet added:
 

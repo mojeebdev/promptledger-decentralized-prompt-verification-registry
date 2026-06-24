@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: promptledger
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OG_API_KEY
+        sync: false
+      - key: OG_ROUTER_API
+        value: https://router-api-testnet.integratenetwork.work/v1
+      - key: OG_MODEL_ID
+        value: qwen2.5-omni

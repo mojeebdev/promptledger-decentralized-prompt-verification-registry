@@ -53,7 +53,10 @@ export async function runPromptEvaluation(
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      const errorText = data?.error || `Proxy error ${response.status}`;
+      const errorText =
+        response.status === 404
+          ? 'Compute API not found on this host. Redeploy with Vercel or Render (see README), or enable Demo Mode.'
+          : data?.error || `Proxy error ${response.status}`;
       lastError = {
         message: errorText,
         status: response.status,
