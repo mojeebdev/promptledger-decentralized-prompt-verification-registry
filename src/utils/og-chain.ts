@@ -1,12 +1,11 @@
 /**
  * 0G Chain Integration
  * Anchors prompt hashes and scores on-chain
- * 
- * CONTRACT DEPLOYED: 0xb6aedBF17a11928A63773F88a9CfD3E252F43a63
+ *
  * Network: 0G Testnet (chainId: 16602)
  */
 
-import { encodeFunctionData, parseEther } from 'viem';
+import { encodeFunctionData } from 'viem';
 
 // PromptLedger contract ABI
 const PROMPT_LEDGER_ABI = [
@@ -55,12 +54,19 @@ const PROMPT_LEDGER_ABI = [
   },
 ] as const;
 
-// DEPLOYED CONTRACT ADDRESS - 0G Testnet
-const PROMPT_LEDGER_ADDRESS: `0x${string}` = '0xb6aedBF17a11928A63773F88a9CfD3E252F43a63';
+const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
+
+// Override via .env.local if you deployed your own contract
+const PROMPT_LEDGER_ADDRESS: `0x${string}` = (
+  import.meta.env.VITE_PROMPT_LEDGER_ADDRESS ||
+  '0xb6aedBF17a11928A63773F88a9CfD3E252F43a63'
+) as `0x${string}`;
+
+export const OG_TESTNET_CHAIN_ID = 16602;
 
 // 0G Testnet chain config
 export const OG_TESTNET = {
-  id: 16602,
+  id: OG_TESTNET_CHAIN_ID,
   name: '0G Testnet',
   nativeCurrency: { name: '0G', symbol: '0G', decimals: 18 },
   rpcUrls: {
@@ -89,10 +95,13 @@ export interface PromptRecord {
 }
 
 /**
- * Check if on-chain anchoring is available
+ * Check if on-chain anchoring is configured (contract address set)
  */
 export function isChainAnchoringAvailable(): boolean {
-  return PROMPT_LEDGER_ADDRESS !== null && PROMPT_LEDGER_ADDRESS !== '0x0000000000000000000000000000000000000000';
+  return (
+    Boolean(PROMPT_LEDGER_ADDRESS) &&
+    PROMPT_LEDGER_ADDRESS !== '0x0000000000000000000000000000000000000000'
+  );
 }
 
 /**
@@ -100,6 +109,14 @@ export function isChainAnchoringAvailable(): boolean {
  */
 export function getContractAddress(): string {
   return PROMPT_LEDGER_ADDRESS;
+}
+
+function toBytes32(value: string): `0x${string}` {
+  const hex = value.startsWith('0x') ? value.slice(2) : value;
+  if (!/^[0-9a-fA-F]+$/.test(hex)) {
+    throw new Error(`Invalid bytes32 value: ${value}`);
+  }
+  return `0x${hex.padStart(64, '0').slice(0, 64)}` as `0x${string}`;
 }
 
 /**
@@ -112,24 +129,24 @@ export async function anchorToChain(params: {
   score: number;
   walletClient?: {
     account: { address: `0x${string}` };
-    chain: { id: number };
+    chain: { id: number } | null;
     sendTransaction: (tx: {
       to: `0x${string}`;
       data: `0x${string}`;
       value?: bigint;
+      chain?: typeof OG_TESTNET;
     }) => Promise<`0x${string}`>;
   };
 }): Promise<AnchorResult> {
   const { promptHash, parentHash, storageRoot, score, walletClient } = params;
 
-  if (!PROMPT_LEDGER_ADDRESS) {
-    console.log('[0G Chain] Contract not deployed - anchor pending');
+  if (!isChainAnchoringAvailable()) {
     return {
       success: false,
       txHash: null,
       blockNumber: null,
       isPending: true,
-      error: 'Contract not deployed. On-chain anchoring pending.',
+      error: 'Contract address not configured.',
     };
   }
 
@@ -143,12 +160,21 @@ export async function anchorToChain(params: {
     };
   }
 
-  try {
-    const promptHashBytes = promptHash as `0x${string}`;
-    const parentHashBytes = (parentHash || '0x0000000000000000000000000000000000000000000000000000000000000000') as `0x${string}`;
-    const storageRootBytes = storageRoot as `0x${string}`;
+  if (walletClient.chain?.id && walletClient.chain.id !== OG_TESTNET_CHAIN_ID) {
+    return {
+      success: false,
+      txHash: null,
+      blockNumber: null,
+      isPending: false,
+      error: `Wallet is on chain ${walletClient.chain.id}, not 0G Testnet (${OG_TESTNET_CHAIN_ID}). Switch network in MetaMask.`,
+    };
+  }
 
-    // Encode function call
+  try {
+    const promptHashBytes = toBytes32(promptHash);
+    const parentHashBytes = toBytes32(parentHash || ZERO_BYTES32);
+    const storageRootBytes = toBytes32(storageRoot);
+
     const data = encodeFunctionData({
       abi: PROMPT_LEDGER_ABI,
       functionName: 'anchorPrompt',
@@ -156,17 +182,17 @@ export async function anchorToChain(params: {
     });
 
     console.log('[0G Chain] Sending transaction to:', PROMPT_LEDGER_ADDRESS);
-    console.log('[0G Chain] Function data:', data);
-    
-    // Send transaction
+    console.log('[0G Chain] Explorer:', getExplorerContractUrl());
+
     const txHash = await walletClient.sendTransaction({
       to: PROMPT_LEDGER_ADDRESS,
       data,
       value: BigInt(0),
+      chain: OG_TESTNET,
     });
 
     console.log('[0G Chain] Transaction sent:', txHash);
-    console.log('[0G Chain] Explorer:', `https://explorer-testnet.0g.ai/tx/${txHash}`);
+    console.log('[0G Chain] Tx explorer:', getExplorerTxUrl(txHash));
 
     return {
       success: true,
@@ -177,12 +203,21 @@ export async function anchorToChain(params: {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[0G Chain] Transaction failed:', errorMessage);
+
+    const friendly = errorMessage.includes('User rejected')
+      ? 'Transaction rejected in wallet'
+      : errorMessage.includes('insufficient funds')
+        ? 'Insufficient 0G for gas — get testnet tokens from the faucet'
+        : errorMessage.includes('Prompt already anchored')
+          ? 'This prompt hash is already on-chain'
+          : errorMessage;
+
     return {
       success: false,
       txHash: null,
       blockNumber: null,
       isPending: false,
-      error: errorMessage,
+      error: friendly,
     };
   }
 }
@@ -206,7 +241,7 @@ export async function getPromptFromChain(
   }
 
   try {
-    const [parentHash, storageRoot, score, submitter, timestamp, exists] = 
+    const [parentHash, storageRoot, score, submitter, timestamp, exists] =
       await publicClient.readContract({
         address: PROMPT_LEDGER_ADDRESS,
         abi: PROMPT_LEDGER_ABI,

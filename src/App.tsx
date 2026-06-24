@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
+import { useAccount, usePublicClient, useWalletClient, useSwitchChain } from 'wagmi';
 import {
   X,
   ChevronRight,
@@ -31,7 +31,15 @@ import {
   type ComputeResult
 } from './utils/og-compute';
 import { uploadToStorage, downloadFromStorage, type StorageData, type StorageResult } from './utils/og-storage';
-import { anchorToChain, isChainAnchoringAvailable, getExplorerTxUrl, type AnchorResult } from './utils/og-chain';
+import {
+  anchorToChain,
+  isChainAnchoringAvailable,
+  getExplorerTxUrl,
+  getExplorerContractUrl,
+  getContractAddress,
+  OG_TESTNET_CHAIN_ID,
+  type AnchorResult,
+} from './utils/og-chain';
 
 // Fixed test cases - NEVER regenerated, always the same benchmark
 const FIXED_TEST_CASES = [
@@ -102,6 +110,7 @@ interface LeaderboardEntry {
   isLocalStorage?: boolean;
   hasDemoResults?: boolean;
   chainAnchorPending?: boolean;
+  chainAnchorError?: string;
 }
 
 interface DebugLog {
@@ -121,9 +130,10 @@ function truncateHash(hash: string) {
 }
 
 export default function App() {
-  const { address: connectedAddress, isConnected } = useAccount();
+  const { address: connectedAddress, isConnected, chain } = useAccount();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+  const { switchChainAsync } = useSwitchChain();
   
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'submit'>('leaderboard');
   const [promptTitle, setPromptTitle] = useState('');
@@ -230,8 +240,13 @@ export default function App() {
     }
 
     const chainAvailable = isChainAnchoringAvailable();
-    addLog('chain', chainAvailable ? 'success' : 'warning', 
-      chainAvailable ? 'On-chain anchoring available' : 'On-chain anchoring PENDING (contract not deployed)');
+    addLog(
+      'chain',
+      chainAvailable ? 'success' : 'warning',
+      chainAvailable
+        ? `Contract ready: ${getContractAddress()}`
+        : 'Contract address not configured'
+    );
 
     try {
       setEvalStatus('Computing prompt hash...');
@@ -382,6 +397,20 @@ export default function App() {
       setEvalStatus('Anchoring to 0G Chain...');
 
       addLog('chain', 'info', 'Attempting on-chain anchor...');
+
+      if (chain?.id !== OG_TESTNET_CHAIN_ID) {
+        addLog('chain', 'info', 'Switching wallet to 0G Testnet...');
+        try {
+          await switchChainAsync({ chainId: OG_TESTNET_CHAIN_ID });
+        } catch (switchErr) {
+          const msg = switchErr instanceof Error ? switchErr.message : 'Network switch failed';
+          addLog('chain', 'error', msg);
+          setError(`Please switch MetaMask to 0G Testnet (chain ${OG_TESTNET_CHAIN_ID}): ${msg}`);
+          setIsEvaluating(false);
+          return;
+        }
+      }
+
       const anchorResult: AnchorResult = await anchorToChain({
         promptHash,
         parentHash,
@@ -393,17 +422,18 @@ export default function App() {
       let txHash: string | null = null;
       let txExplorerUrl: string | null = null;
       let chainAnchorPending = false;
+      let chainAnchorError: string | undefined;
 
       if (anchorResult.success && anchorResult.txHash) {
         txHash = anchorResult.txHash;
         txExplorerUrl = getExplorerTxUrl(txHash);
-        addLog('chain', 'success', `Transaction confirmed: ${txHash}`);
+        addLog('chain', 'success', `Transaction sent: ${txHash}`);
       } else if (anchorResult.isPending) {
         chainAnchorPending = true;
-        addLog('chain', 'warning', 'On-chain anchor PENDING - contract not deployed yet');
+        addLog('chain', 'warning', anchorResult.error || 'On-chain anchor pending');
       } else {
-        chainAnchorPending = true;
-        addLog('chain', 'error', `Anchor failed: ${anchorResult.error}`);
+        chainAnchorError = anchorResult.error || 'Anchor transaction failed';
+        addLog('chain', 'error', chainAnchorError);
       }
 
       setEvalProgress(100);
@@ -428,6 +458,7 @@ export default function App() {
         isLocalStorage: storageResult.isLocalFallback,
         hasDemoResults: hasAnyDemoResults,
         chainAnchorPending,
+        chainAnchorError,
       };
 
       setLeaderboard(prev => {
@@ -448,7 +479,7 @@ export default function App() {
       setError(errorMsg);
       setIsEvaluating(false);
     }
-  }, [promptTitle, promptText, connectedAddress, isConnected, walletClient, findExistingPrompt, addLog, useDemoMode, goToTab]);
+  }, [promptTitle, promptText, connectedAddress, isConnected, walletClient, chain, switchChainAsync, findExistingPrompt, addLog, useDemoMode, goToTab]);
 
   const handleCopyHash = (hash: string) => {
     navigator.clipboard.writeText(hash);
@@ -547,7 +578,7 @@ export default function App() {
 
               <div className="animate-fade-in-up">
                 {/* Warnings Banner */}
-                {(selectedPrompt.hasDemoResults || selectedPrompt.isLocalStorage || selectedPrompt.chainAnchorPending) && (
+                {(selectedPrompt.hasDemoResults || selectedPrompt.isLocalStorage || selectedPrompt.chainAnchorPending || selectedPrompt.chainAnchorError) && (
                   <div className="bg-[var(--warning)]/10 border border-[var(--warning)]/30 rounded-xl p-4 mb-6">
                     <div className="flex items-start gap-3">
                       <AlertTriangle className="w-5 h-5 text-[var(--warning)] mt-0.5 flex-shrink-0" />
@@ -557,7 +588,13 @@ export default function App() {
                           {selectedPrompt.chainAnchorPending && (
                             <li className="flex items-center gap-2">
                               <Clock className="w-3 h-3" />
-                              On-chain anchor PENDING - contract not deployed yet
+                              On-chain anchor pending — wallet or contract not ready
+                            </li>
+                          )}
+                          {selectedPrompt.chainAnchorError && (
+                            <li className="flex items-center gap-2">
+                              <AlertCircle className="w-3 h-3" />
+                              Anchor failed: {selectedPrompt.chainAnchorError}
                             </li>
                           )}
                           {selectedPrompt.isLocalStorage && (
@@ -641,15 +678,7 @@ export default function App() {
                     <div className="flex items-center gap-3">
                       <span className="font-space text-xs text-[var(--muted)] uppercase w-24">On-Chain</span>
                       <div className="flex items-center gap-2 flex-1">
-                        {selectedPrompt.chainAnchorPending ? (
-                          <>
-                            <span className="px-2 py-0.5 rounded bg-[var(--warning)]/10 text-[var(--warning)] font-space text-xs flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              PENDING
-                            </span>
-                            <span className="text-xs text-[var(--muted)]">(contract not deployed)</span>
-                          </>
-                        ) : selectedPrompt.txHash ? (
+                        {selectedPrompt.txHash ? (
                           <a 
                             href={selectedPrompt.txExplorerUrl || '#'}
                             target="_blank"
@@ -659,6 +688,13 @@ export default function App() {
                             <code className="hash-text text-sm">{truncateHash(selectedPrompt.txHash)}</code>
                             <ExternalLink className="w-3 h-3" />
                           </a>
+                        ) : selectedPrompt.chainAnchorError ? (
+                          <span className="text-xs text-[var(--fail)] font-fragment">{selectedPrompt.chainAnchorError}</span>
+                        ) : selectedPrompt.chainAnchorPending ? (
+                          <span className="px-2 py-0.5 rounded bg-[var(--warning)]/10 text-[var(--warning)] font-space text-xs flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Pending
+                          </span>
                         ) : (
                           <span className="text-xs text-[var(--muted)]">Not anchored</span>
                         )}
@@ -924,15 +960,17 @@ export default function App() {
                             {truncateAddress(entry.submitter)}
                           </div>
                           <div className="col-span-2">
-                            {entry.chainAnchorPending ? (
-                              <span className="px-2 py-0.5 rounded bg-[var(--warning)]/10 text-[var(--warning)] font-space text-xs flex items-center gap-1 w-fit">
-                                <Clock className="w-3 h-3" />
-                                PENDING
-                              </span>
-                            ) : entry.txHash ? (
+                            {entry.txHash ? (
                               <span className="text-[var(--success)] text-xs font-space flex items-center gap-1">
                                 <CheckCircle className="w-3 h-3" />
                                 Confirmed
+                              </span>
+                            ) : entry.chainAnchorError ? (
+                              <span className="text-[var(--fail)] text-xs font-space">Failed</span>
+                            ) : entry.chainAnchorPending ? (
+                              <span className="px-2 py-0.5 rounded bg-[var(--warning)]/10 text-[var(--warning)] font-space text-xs flex items-center gap-1 w-fit">
+                                <Clock className="w-3 h-3" />
+                                Pending
                               </span>
                             ) : (
                               <span className="text-[var(--muted)] text-xs">—</span>
@@ -1051,7 +1089,7 @@ export default function App() {
           <div className="flex items-center gap-6 text-sm text-[var(--muted)]">
             <a href="#" className="hover:text-[var(--text)] transition-colors font-space">X</a>
             <a href="#" className="hover:text-[var(--text)] transition-colors font-space">GitHub</a>
-            <a href="#" className="hover:text-[var(--text)] transition-colors font-space">Docs</a>
+            <a href={getExplorerContractUrl()} target="_blank" rel="noopener noreferrer" className="hover:text-[var(--text)] transition-colors font-space">Contract</a>
             <span className="font-fragment">© 2024</span>
           </div>
         </div>
