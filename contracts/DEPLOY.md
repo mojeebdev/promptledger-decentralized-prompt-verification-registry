@@ -6,7 +6,7 @@
 - 0G Testnet added to your wallet:
   - Chain ID: 16602
   - RPC: https://evmrpc-testnet.0g.ai
-  - Explorer: https://explorer-testnet.0g.ai
+  - Explorer: https://chainscan-galileo.0g.ai
   - Symbol: 0G
 
 ## Option 1: Deploy via Remix (Easiest)
@@ -73,6 +73,6 @@ cast call CONTRACT_ADDRESS \
 ## Verify on Explorer
 
 After deploying, verify the contract source on:
-https://explorer-testnet.0g.ai
+https://chainscan-galileo.0g.ai
 
 This makes the contract readable and interactions traceable.

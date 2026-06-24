@@ -64,7 +64,7 @@ This matters because an earlier iteration of this project *did* fake all three o
 0xb6aedBF17a11928A63773F88a9CfD3E252F43a63
 ```
 
-[View on explorer →](https://explorer-testnet.0g.ai/address/0xb6aedBF17a11928A63773F88a9CfD3E252F43a63)
+[View on explorer →](https://chainscan-galileo.0g.ai/address/0xb6aedBF17a11928A63773F88a9CfD3E252F43a63)
 
 Network: 0G Testnet (chainId `16602`) · RPC: `https://evmrpc-testnet.0g.ai`
 
@@ -112,7 +112,7 @@ You'll need a wallet (MetaMask or compatible) with 0G Testnet added:
 
 - Chain ID: `16602`
 - RPC: `https://evmrpc-testnet.0g.ai`
-- Explorer: `https://explorer-testnet.0g.ai`
+- Explorer: `https://chainscan-galileo.0g.ai`
 
 Get testnet 0G from the official faucet to pay for the on-chain anchor transaction when submitting.
 

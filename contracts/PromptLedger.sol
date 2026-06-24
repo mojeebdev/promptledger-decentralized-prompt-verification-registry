@@ -6,7 +6,7 @@ pragma solidity ^0.8.20;
  * 
  * Deploy to 0G Testnet (chainId 16602)
  * RPC: https://evmrpc-testnet.0g.ai
- * Explorer: https://explorer-testnet.0g.ai
+ * Explorer: https://chainscan-galileo.0g.ai
  */
 contract PromptLedger {
     
