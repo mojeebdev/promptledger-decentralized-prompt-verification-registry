@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { proxyCompute, getHealth } from './proxy-compute.js';
 import { uploadStorage, downloadStorage, getStorageHealth } from './proxy-storage.js';
+import { relayStorageRpc } from './proxy-storage-relay.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -80,6 +81,23 @@ const server = createServer(async (req, res) => {
 
   if (req.url === '/api/health' && req.method === 'GET') {
     json(res, 200, { ...getHealth(), storage: getStorageHealth() });
+    return;
+  }
+
+  if (req.url === '/api/storage-relay' && req.method === 'POST') {
+    let raw = '';
+    req.on('data', (chunk) => {
+      raw += chunk;
+    });
+    req.on('end', async () => {
+      try {
+        const body = JSON.parse(raw || '{}');
+        const result = await relayStorageRpc(body);
+        json(res, result.status, result.data);
+      } catch {
+        json(res, 400, { error: 'Invalid JSON body' });
+      }
+    });
     return;
   }
 

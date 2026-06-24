@@ -385,9 +385,9 @@ export default function App() {
       addLog('score', 'success', `Final score: ${score}/15`);
 
       setEvalProgress(60);
-      setEvalStatus('Uploading to 0G Storage...');
+      setEvalStatus('Uploading to 0G Storage — approve in MetaMask...');
 
-      addLog('storage', 'info', 'Uploading to 0G Storage via server proxy...');
+      addLog('storage', 'info', 'Uploading to 0G Storage (approve storage fee in wallet)...');
       const storageData: StorageData = {
         promptTitle,
         promptText,
