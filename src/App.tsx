@@ -385,9 +385,9 @@ export default function App() {
       addLog('score', 'success', `Final score: ${score}/15`);
 
       setEvalProgress(60);
-      setEvalStatus('Uploading to 0G Storage...');
+      setEvalStatus('Uploading to 0G Storage — approve in MetaMask...');
 
-      addLog('storage', 'info', 'Uploading to 0G Storage...');
+      addLog('storage', 'info', 'Uploading to 0G Storage (approve storage fee in wallet)...');
       const storageData: StorageData = {
         promptTitle,
         promptText,
@@ -420,7 +420,12 @@ export default function App() {
       if (storageResult.isLocalFallback) {
         addLog('storage', 'warning', 'Using local storage (not on 0G network)');
       } else {
-        addLog('storage', 'success', `Storage root: ${storageResult.rootHash?.slice(0, 20)}...`);
+        addLog(
+          'storage',
+          'success',
+          `On 0G Storage: ${storageResult.rootHash?.slice(0, 20)}...`,
+          storageResult.storageTxHash ? { storageTx: storageResult.storageTxHash } : undefined
+        );
       }
 
       setEvalProgress(80);

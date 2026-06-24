@@ -1,10 +1,16 @@
 /**
  * 0G Storage Integration
- * Stores prompt data, test results, and evaluation outputs
- * 
- * IMPORTANT: This module does NOT fake success.
- * If 0G Storage upload fails, we return an error state, not a fake hash.
+ * Stores prompt data, test results, and evaluation outputs on 0G Storage Turbo.
+ *
+ * Uploads use the official SDK with the user's MetaMask wallet (storage fee tx).
  */
+
+import { MemData, Indexer } from '@0gfoundation/0g-storage-ts-sdk/browser';
+import { BrowserProvider } from 'ethers';
+import { OG_TESTNET_CHAIN_ID } from './og-chain';
+
+const RPC_URL = 'https://evmrpc-testnet.0g.ai';
+const INDEXER_RPC = 'https://indexer-storage-testnet-turbo.0g.ai';
 
 interface StorageData {
   promptTitle: string;
@@ -40,121 +46,164 @@ interface StorageData {
 export interface StorageResult {
   success: boolean;
   rootHash: string | null;
+  storageTxHash?: string;
   error?: string;
   isLocalFallback?: boolean;
 }
 
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+    };
+  }
+}
+
+async function getSigner() {
+  if (!window.ethereum) {
+    return null;
+  }
+
+  const provider = new BrowserProvider(window.ethereum);
+  const accounts = (await provider.send('eth_accounts', [])) as string[];
+  if (!accounts.length) {
+    return null;
+  }
+
+  const network = await provider.getNetwork();
+  if (Number(network.chainId) !== OG_TESTNET_CHAIN_ID) {
+    throw new Error(
+      `Switch MetaMask to 0G Testnet (chain ${OG_TESTNET_CHAIN_ID}) before uploading to storage`
+    );
+  }
+
+  return provider.getSigner();
+}
+
+function friendlyUploadError(message: string): string {
+  if (message.includes('User rejected') || message.includes('user rejected')) {
+    return 'Storage upload rejected in wallet';
+  }
+  if (message.includes('insufficient funds')) {
+    return 'Insufficient 0G for storage fees — get testnet tokens from the faucet';
+  }
+  return message;
+}
+
+function parseStoredPayload(raw: string): StorageData | null {
+  try {
+    const parsed = JSON.parse(raw) as StorageData & { version?: string };
+    if (parsed.version === 'PROMPTLEDGER_STORAGE_V1') {
+      const { version: _version, ...data } = parsed;
+      return data;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Upload data to 0G Storage
- * 
- * Returns:
- * - success: true + rootHash if uploaded to 0G Storage
- * - success: false + error message if upload failed
- * - success: true + isLocalFallback: true if using local storage only (not on 0G network)
+ * Upload evaluation data to 0G Storage (requires wallet approval for storage fees).
  */
 export async function uploadToStorage(data: StorageData): Promise<StorageResult> {
-  console.log('[0G Storage] Attempting upload...');
-  
-  try {
-    // Real 0G Storage SDK integration would go here:
-    // import { ZgBlob, getFlowContract } from '@0glabs/0g-ts-client'
-    // const blob = new ZgBlob(new Blob([JSON.stringify(data)]))
-    // const tree = await blob.merkleTree()
-    // ... submit to 0G Storage network
-    
-    // For now, attempt to use a hypothetical API endpoint
-    const response = await fetch('https://indexer-storage-testnet-turbo.0g.ai/file/upload', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        data: data,
-        submitter: data.submitter,
-      }),
-    }).catch(() => null);
+  console.log('[0G Storage] Uploading via SDK...');
 
-    if (response && response.ok) {
-      const result = await response.json();
-      console.log('[0G Storage] Upload successful:', result.root);
+  try {
+    const signer = await getSigner();
+    if (!signer) {
       return {
-        success: true,
-        rootHash: result.root || result.hash,
+        success: false,
+        rootHash: null,
+        error: 'Wallet not connected — connect MetaMask to upload to 0G Storage',
       };
     }
-    
-    // Real API failed or unavailable
-    console.warn('[0G Storage] API unavailable, using local storage fallback');
-    
-    // Store locally in IndexedDB/localStorage as fallback
-    // This is NOT the same as faking success - we explicitly mark it as local
-    const localHash = await computeContentHash(data);
-    
-    // Store in localStorage for persistence
-    const localKey = `promptledger_local_${localHash.slice(0, 16)}`;
-    localStorage.setItem(localKey, JSON.stringify(data));
-    
+
+    const payload = JSON.stringify({
+      version: 'PROMPTLEDGER_STORAGE_V1',
+      ...data,
+    });
+    const bytes = new TextEncoder().encode(payload);
+    const memData = new MemData(bytes);
+
+    const [, treeErr] = await memData.merkleTree();
+    if (treeErr !== null) {
+      return {
+        success: false,
+        rootHash: null,
+        error: `Merkle tree failed: ${treeErr}`,
+      };
+    }
+
+    const indexer = new Indexer(INDEXER_RPC);
+    console.log('[0G Storage] Approve the storage fee transaction in MetaMask...');
+
+    const [tx, uploadErr] = await indexer.upload(memData, RPC_URL, signer);
+    if (uploadErr !== null) {
+      const friendly = friendlyUploadError(String(uploadErr));
+      console.error('[0G Storage] Upload failed:', friendly);
+      return {
+        success: false,
+        rootHash: null,
+        error: friendly,
+      };
+    }
+
+    const rootHash = 'rootHash' in tx ? tx.rootHash : tx.rootHashes[0];
+    const storageTxHash = 'txHash' in tx ? tx.txHash : tx.txHashes[0];
+
+    console.log('[0G Storage] Upload successful:', rootHash);
+    console.log('[0G Storage] Storage tx:', storageTxHash);
+
     return {
       success: true,
-      rootHash: localHash,
-      isLocalFallback: true, // Caller knows this is NOT on 0G Storage
+      rootHash,
+      storageTxHash,
+      isLocalFallback: false,
     };
-    
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown storage error';
     console.error('[0G Storage] Upload failed:', errorMsg);
     return {
       success: false,
       rootHash: null,
-      error: errorMsg,
+      error: friendlyUploadError(errorMsg),
     };
   }
 }
 
 /**
- * Compute deterministic SHA-256 hash of storage content
+ * Download data from 0G Storage by root hash.
  */
-async function computeContentHash(data: StorageData): Promise<string> {
-  const content = JSON.stringify({
-    version: 'PROMPTLEDGER_STORAGE_V1',
-    promptHash: data.promptHash,
-    title: data.promptTitle,
-    submitter: data.submitter,
-    timestamp: data.timestamp,
-    score: data.score,
-  });
-  
-  const encoder = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(content));
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * Download data from storage by root hash
- */
-export async function downloadFromStorage(rootHash: string): Promise<{ data: StorageData | null; isLocal: boolean }> {
-  // Try localStorage first (for locally-stored fallbacks)
+export async function downloadFromStorage(
+  rootHash: string
+): Promise<{ data: StorageData | null; isLocal: boolean }> {
   const localKey = `promptledger_local_${rootHash.slice(0, 16)}`;
   const localData = localStorage.getItem(localKey);
-  
+
   if (localData) {
     console.log('[0G Storage] Found in local storage:', rootHash);
-    return { data: JSON.parse(localData), isLocal: true };
+    return { data: parseStoredPayload(localData), isLocal: true };
   }
-  
-  // Try 0G Storage network
+
   try {
-    const response = await fetch(`https://indexer-storage-testnet-turbo.0g.ai/file?root=${rootHash}`);
-    if (response.ok) {
-      const data = await response.json();
+    const indexer = new Indexer(INDEXER_RPC);
+    const [blob, err] = await indexer.downloadToBlob(rootHash, { proof: true });
+    if (err !== null) {
+      console.warn('[0G Storage] Download failed:', err);
+      return { data: null, isLocal: false };
+    }
+
+    const text = await blob.text();
+    const data = parseStoredPayload(text);
+    if (data) {
       console.log('[0G Storage] Downloaded from network:', rootHash);
       return { data, isLocal: false };
     }
-  } catch {
-    console.warn('[0G Storage] Network download failed');
+  } catch (error) {
+    console.warn('[0G Storage] Network download failed:', error);
   }
-  
+
   return { data: null, isLocal: false };
 }
 
